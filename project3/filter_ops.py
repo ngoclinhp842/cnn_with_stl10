@@ -39,15 +39,17 @@ def conv2_gray(img, kers, verbose=True):
     n_kers, ker_x, ker_y = kers.shape
 
     # zero-padding for each kernel
-    pad_size = np.ceil((np.max(kers.shape) - 1) / 2).astype(int)
+    pad_size = np.ceil((ker_x - 1) / 2).astype(int)
     img_padded = np.pad(img, pad_size, constant_values=0)
         
     filteredImg = np.zeros((n_kers, img_y, img_x))
         
+    # flip kernel horizontally and vertically (along Fy, Fx axis)
+    kers = np.flip(kers, axis=(1, 2))
+    
     # convolve each kernel with same boundary conditions
     for k in range(n_kers):
-        # flip kernel horizontally and vertically (along Fy, Fx axis)
-        ker = np.flipud(np.fliplr(kers[k]))
+        ker = kers[k]
         
         # align convolution so that it starts aligned with the top-left corner of img
         for y in range(img_y):
@@ -100,15 +102,17 @@ def conv2(img, kers, verbose=True):
     n_kers, ker_x, ker_y = kers.shape
     
     # zero-padding for each kernel
-    pad_size = np.ceil((np.max(kers.shape) - 1) / 2).astype(int)
+    pad_size = np.ceil((ker_x - 1) / 2).astype(int)
     img_padded = np.pad(img, ((0,0),(pad_size, pad_size), (pad_size, pad_size)), constant_values=0)
         
     filteredImg = np.zeros((n_kers, n_chans, img_y, img_x))
         
+    # flip kernel horizontally and vertically (along Fy, Fx axis)
+    kers = np.flip(kers, axis=(1, 2))
     # convolve each kernel with same boundary conditions
     for k in range(n_kers):
         # flip kernel horizontally and vertically (along Fy, Fx axis)
-        ker = np.flipud(np.fliplr(kers[k]))
+        ker = kers[k]
         
         for n in range(n_chans):
             # align convolution so that it starts aligned with the top-left corner of img
@@ -166,26 +170,33 @@ def conv2nn(imgs, kers, bias, verbose=True):
     '''
     batch_sz, n_chans, img_y, img_x = imgs.shape
     n_kers, n_ker_chans, ker_x, ker_y = kers.shape
-
-    # zero-padding for each kernel
-    pad_size = np.ceil((np.max(kers.shape) - 1) / 2).astype(int)
-    img_padded = np.pad(img, ((0,0),(pad_size, pad_size), (pad_size, pad_size)), constant_values=0)
+    
+    # flip kernel horizontally and vertically (along Fy, Fx axis)
+    kers = np.flip(kers, axis=(2, 3))
+    
+    output = np.zeros((batch_sz, n_kers, n_chans, img_y, img_x))
+    
+    for b in range(batch_sz):
+        # zero-padding for each kernel
+        pad_size = np.ceil((ker_x - 1) / 2).astype(int)
+        img_padded = np.pad(imgs[b], ((0,0), (pad_size, pad_size), (pad_size, pad_size)), constant_values=0)
+        # convolve each kernel with same boundary conditions
+        for k in range(n_kers):
+            ker = kers[k]
+            for n in range(n_chans):
+                # align convolution so that it starts aligned with the top-left corner of img
+                for y in range(img_y):
+                    for x in range(img_x):
+                        # get the window that the kernel is looking at
+                        window = img_padded[n, y: y + ker_y, x: x + ker_x]
+                        # start multiple to get the convolutional result
+                        output[b, k, n, y, x] = np.sum(window * ker)
+    
+    output = np.sum(output, axis=2)  # (N, K, Iy, Ix)
+    output = output + bias[np.newaxis, :, np.newaxis, np.newaxis]
+    
+    return output
         
-    filteredImg = np.zeros((n_kers, n_chans, img_y, img_x))
-        
-    # convolve each kernel with same boundary conditions
-    for k in range(n_kers):
-        # flip kernel horizontally and vertically (along Fy, Fx axis)
-        ker = np.flipud(np.fliplr(kers[k]))
-        
-        for n in range(n_chans):
-            # align convolution so that it starts aligned with the top-left corner of img
-            for y in range(img_y):
-                for x in range(img_x):
-                    # get the window that the kernel is looking at
-                    window = img_padded[n, y: y + ker_y, x: x + ker_x]
-                    # start multiple to get the convolutional result
-                    filteredImg[k, n, y, x] = np.sum(window * ker)
                     
     if verbose:
         print(f'batch_sz={batch_sz}, n_chan={n_chans}, img_x={img_y}, img_y={img_x}')
@@ -216,7 +227,8 @@ def get_pooling_out_shape(img_dim, pool_size, strides):
     int. The size in pixels of the output of the image after max pooling is applied, in the dimension
         img_dim.
     '''
-    pass
+    pool_out_shape = np.floor((img_dim - pool_size) / strides) + 1
+    return pool_out_shape.astype(int)
 
 
 def max_pool(inputs, pool_size=2, strides=1, verbose=True):
@@ -247,8 +259,25 @@ def max_pool(inputs, pool_size=2, strides=1, verbose=True):
     - Overall, this should be a simpler implementation than `conv2_gray`
     '''
     img_y, img_x = inputs.shape
+    
+    out_dim_x = get_pooling_out_shape(img_x, pool_size, strides)
+    out_dim_y = get_pooling_out_shape(img_y, pool_size, strides)
+    
+    outputs = np.zeros((out_dim_y, out_dim_x))
+        
 
-    pass
+    # align convolution so that it starts aligned with the top-left corner of img
+    for y in range(out_dim_y):
+        for x in range(out_dim_x):
+            y_start = y * strides
+            x_start = x * strides
+            # get the window that the kernel is looking at
+            window = inputs[y_start: y_start + pool_size, x_start: x_start + pool_size]
+#            print(window)
+            # start multiple to get the convolutional result
+            outputs[y, x] = np.max(window)
+    return outputs
+    
 
 
 def max_poolnn(inputs, pool_size=2, strides=1, verbose=True):
