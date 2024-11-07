@@ -190,7 +190,7 @@ def conv2nn(imgs, kers, bias, verbose=True):
                         # get the window that the kernel is looking at
                         window = img_padded[n, y: y + ker_y, x: x + ker_x]
                         # start multiple to get the convolutional result
-                        output[b, k, n, y, x] = np.sum(window * ker)
+                        output[b, k, n, y, x] = np.sum(window * ker[n])
     
     output = np.sum(output, axis=2)  # (N, K, Iy, Ix)
     output = output + bias[np.newaxis, :, np.newaxis, np.newaxis]
