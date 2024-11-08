@@ -190,7 +190,7 @@ def conv2nn(imgs, kers, bias, verbose=True):
                         # get the window that the kernel is looking at
                         window = img_padded[n, y: y + ker_y, x: x + ker_x]
                         # start multiple to get the convolutional result
-                        output[b, k, n, y, x] = np.sum(window * ker[n])
+                        output[b, k, n, y, x] = np.sum(window * ker)
     
     output = np.sum(output, axis=2)  # (N, K, Iy, Ix)
     output = output + bias[np.newaxis, :, np.newaxis, np.newaxis]
@@ -228,6 +228,7 @@ def get_pooling_out_shape(img_dim, pool_size, strides):
         img_dim.
     '''
     pool_out_shape = np.floor((img_dim - pool_size) / strides) + 1
+    # print(pool_out_shape)
     return pool_out_shape.astype(int)
 
 
@@ -308,5 +309,25 @@ def max_poolnn(inputs, pool_size=2, strides=1, verbose=True):
     - If you added additional nested loops, be careful when you reset your input image indices
     '''
     mini_batch_sz, n_chans, img_y, img_x = inputs.shape
+    out_x = get_pooling_out_shape(img_x, pool_size, strides)
+    out_y = get_pooling_out_shape(img_y, pool_size, strides)
 
-    pass
+    if verbose:
+        print(f"MaxPool2D \nImage Shape: ({img_y}, {img_x}) \nPooling Window: {pool_size} \nStride: {strides} \nOutput Shape: ({out_y}, {out_x})")
+
+    outputs = np.ndarray((mini_batch_sz, n_chans, out_y, out_x))
+
+    for n in range(mini_batch_sz):
+        for c in range(n_chans):
+            for i in range(out_y):
+                img_i = i*strides
+                for j in range(out_x):
+                    img_j = j*strides
+                    if verbose:
+                        print(f"Output at ({i}, {j}) is from max pool window with top left corner at ({img_j}, {img_i})")
+
+                    outputs[n,c,i,j] = np.max(inputs[n,c,img_i:img_i+pool_size,img_j:img_j+pool_size])
+
+
+
+    return outputs
