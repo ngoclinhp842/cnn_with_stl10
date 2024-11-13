@@ -1,6 +1,6 @@
 '''optimizer.py
 Algorithms to optimize the weights during gradient descent / backprop
-YOUR NAMES HERE
+Varsha Yarram and Michelle Phan
 CS343: Neural Networks
 Project 3: Convolutional Neural Networks
 '''
@@ -61,7 +61,9 @@ class SGD(Optimizer):
         TODO: Write the SGD weight update rule.
         See notebook for review of equations.
         '''
-        pass
+        self.wts = self.wts - self.lr* self.d_wts
+        new_wts_sgd = np.copy(self.wts)
+        return new_wts_sgd
 
 
 class SGD_Momentum(Optimizer):
@@ -91,7 +93,17 @@ class SGD_Momentum(Optimizer):
         TODO: Write the SGD weight update rule.
         See notebook for review of equations.
         '''
-        pass
+        # check for first time step to initialize v
+        if self.velocity is None:
+            self.velocity = np.zeros(shape=self.wts.shape)
+        else:
+            pass
+        # update weights with SGDM   
+        self.velocity = self.m * self.velocity - self.lr * self.d_wts
+        self.wts = self.wts + self.velocity
+        new_wts_sgdm = np.copy(self.wts)
+        return new_wts_sgdm
+
 
 
 class Adam(Optimizer):
@@ -134,7 +146,20 @@ class Adam(Optimizer):
         - Remember that t should = 1 on the 1st wt update.
         - Remember to update/save the new values of v, p between updates.
         '''
-        pass
+        if self.t == 0:
+            self.m = np.zeros(self.wts.shape)
+            self.v = np.zeros(self.wts.shape)
+
+        self.t += 1
+
+        self.m = self.beta1 * self.m + (1 - self.beta1) * self.d_wts
+        self.v = self.beta2 * self.v + (1 - self.beta2) * self.d_wts**2
+
+        n = self.m / (1 - self.beta1**self.t)
+        u = self.v / (1 - self.beta2**self.t)
+        self.wts = self.wts - (self.lr*n)/(u**(0.5) + self.eps)
+        new_wts_adam = np.copy(self.wts)
+        return new_wts_adam
 
 
 class AdamW(Optimizer):

@@ -1,12 +1,12 @@
 '''network.py
 Represents  a neural network (collection of layers)
-YOUR NAMES HERE
+Varsha Yarram and Michelle Phan 
 CS343: Neural Networks
 Project 3: Convolutional Neural Networks
 '''
 import time
 import numpy as np
-
+import filter_ops
 import layer
 
 
@@ -104,7 +104,12 @@ class Network:
         2. Compute and get the weight regularization via `self.wt_reg_reduce()` (implement this next)
         4. Return the sum of the loss and the regularization term.
         '''
-        pass
+        temp_in = inputs
+        for l in self.layers:
+            temp_in = l.forward(temp_in)
+        loss = self.layers[-1].cross_entropy(y)
+        wt_reg = self.wt_reg_reduce()
+        return loss + wt_reg
 
     def wt_reg_reduce(self):
         '''Computes the loss weight regularization for all network layers that have weights
@@ -118,7 +123,10 @@ class Network:
         The network regularization `wt_reg` is simply the sum of all the regularization terms
         for each individual layer.
         '''
-        pass
+        wt_reg = 0
+        for i in self.wt_layer_inds:
+            wt_reg += 0.5 * self.reg * np.sum(np.square(self.layers[i].wts))
+        return wt_reg
 
     def backward(self, y):
         '''Initiates the backward pass through all the layers of the network.
@@ -138,7 +146,9 @@ class Network:
             Remember that the output of layer.backward() becomes the d_upstream to the next layer down.
             We don't care about d_wts, d_b in this method (computed/stored in Layer).
         '''
-        pass
+        d_upstream, d_wts, d_b = None, None, None
+        for each in self.layers[::-1]:
+            d_upstream, d_wts, d_b = each.backward(d_upstream, y)
 
     def predict(self, inputs):
         '''Classifies novel inputs presented to the network using the current
@@ -320,7 +330,35 @@ class ConvNet4(Network):
 
         n_chans, h, w = input_shape
 
-        pass
+        # 1) Input convolutional layer
+        self.layers = []
+
+        #def __init__(self, number, name, n_kers, ker_sz, n_chans=3, wt_scale=0.01, activation='linear', reg=0, verbose=True):
+        layer_1 = layer.Conv2D(0, "conv relu", n_kers[0], ker_sz[0], n_chans=n_chans, wt_scale=wt_scale,  activation='relu', reg=reg, verbose=verbose)
+        self.layers.append(layer_1)
+    
+        # 2) 2x2 max pooling layer
+        layer_2 = layer.MaxPool2D(1, "pool linear", pool_size=pooling_sizes[0], strides=pooling_strides[0], activation='linear', reg=reg, verbose=verbose)
+        self.layers.append(layer_2)
+
+        #def __init__(self, number, name, units, n_units_prev_layer,wt_scale=1e-3, activation='linear', reg=0, verbose=True):
+
+        # 3) Dense layer
+        #finding the previous number of units, readable:
+        im_x = filter_ops.get_pooling_out_shape(w, pooling_sizes[0], pooling_strides[0])
+        im_y = filter_ops.get_pooling_out_shape(h, pooling_sizes[0], pooling_strides[0])
+        prev_layer_units = n_kers[0] * im_x * im_y
+
+        layer_3 = layer.Dense(2, "dense relu", dense_interior_units[0], prev_layer_units, wt_scale=wt_scale, activation='relu', reg=reg, verbose=verbose)
+        self.layers.append(layer_3)
+
+        # 4) Dense softmax output layer
+        layer_4 = layer.Dense(3, "dense softmax", n_classes, dense_interior_units[0], wt_scale=wt_scale , activation='softmax', reg=reg, verbose=verbose)
+        self.layers.append(layer_4)
+
+        # 5) self.wt_layer_inds
+        self.wt_layer_inds = [0,2,3]
+
 
 
 class ConvNet4Accel(Network):

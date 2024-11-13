@@ -1,6 +1,6 @@
 '''layer.py
 Represents a layer of a neural network
-YOUR NAMES HERE
+Varsha Yarram and Michelle Phan
 CS343: Neural Networks
 Project 3: Convolutional Neural Networks
 '''
@@ -74,7 +74,9 @@ class Layer:
             e.g. if y = [0, 2, 1] and num_classes = 4 we have:
             [[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0]]
         '''
-        pass
+        y_one_hot = np.zeros((y.size, num_classes))
+        y_one_hot[np.arange(y.size), y] = 1
+        return y_one_hot
 
     def linear(self):
         '''Linear activation function: f(x) = x.
@@ -86,7 +88,7 @@ class Layer:
         -----------
         No return
         '''
-        pass
+        self.net_act = self.net_in
 
     def relu(self):
         '''Rectified linear activation function. f(x) is defined:
@@ -100,7 +102,8 @@ class Layer:
         -----------
         No return
         '''
-        pass
+        self.net_act = np.where(self.net_in <= 0, 0, self.net_in)
+
 
     def softmax(self):
         '''Softmax activation function. See notebook for a refresher on the
@@ -117,7 +120,9 @@ class Layer:
         -----------
         No return
         '''
-        pass
+        new_net_in = self.net_in + (-1*np.max(self.net_in, keepdims=True))
+        f_z = np.exp(new_net_in) / (np.sum(np.exp(new_net_in), keepdims=True, axis=1))
+        self.net_act = f_z
 
     def loss(self, y):
         '''Computes the loss for this layer. Only should be called on the output
@@ -154,7 +159,12 @@ class Layer:
         -----------
         loss: float. Mean loss over the mini-batch.
         '''
-        pass
+        B = y.shape[0]
+
+        log_act = np.log(self.net_act)
+        correct_loss = log_act[np.arange(B), y.astype(np.integer)]
+        loss = ((-1/B) * np.sum(correct_loss))
+        return loss
 
     def forward(self, inputs):
         '''Computes the forward pass through this particular layer.
@@ -173,7 +183,12 @@ class Layer:
         -----------
         The net_act.
         '''
-        pass
+        self.input = inputs
+        # print(self.input.shape)
+        self.compute_net_in()
+        self.compute_net_act()
+        return self.net_act
+
 
     def backward(self, d_upstream, y):
         '''Do the backward pass through this layer.
@@ -199,7 +214,16 @@ class Layer:
         2. Compute the gradients dprev_net_act, d_wts, and d_b via function call
         3. Save the wt and bias gradients to the appropriate instance variables.
         '''
-        pass
+        # If the upstream gradient is undefined, this means that we are just starting the
+        # backprop process and need to start with the gradient of the loss function (cross-entropy
+        # with respect to the last layer's netAct function (softmax)
+        if d_upstream is None:
+            d_upstream = self.compute_dlast_net_act()
+
+        d_net_in = self.backward_netAct_to_netIn(d_upstream,y)
+        dprev_net_act, self.d_wts, self.d_b = self.backward_netIn_to_prevLayer_netAct(d_net_in)
+        return dprev_net_act, self.d_wts, self.d_b
+
 
     def compute_dlast_net_act(self):
         '''Computes the gradient of the loss function with respect to the last layer's netAct.
@@ -215,7 +239,7 @@ class Layer:
             dlast_net_act = -1/(len(net_act_copy) * net_act_copy)
         else:
             raise RuntimeError('Output layer isnt softmax, so how to compute dlast_net_act is unspecified.')
-
+        
         return dlast_net_act
 
     def compile(self, optimizer_name, **kwargs):
@@ -281,7 +305,15 @@ class Layer:
         Throw an error if the activation function string is not one that you
         implemented.
         '''
-        pass
+        if self.activation == "linear":
+            self.linear()
+        elif self.activation == "softmax":
+            self.softmax()
+        elif self.activation == "relu":
+            self.relu()
+        else:
+            raise Exception("Error: Invalid activation (String self.activation is not one implemented.")
+
 
     def backward_netAct_to_netIn(self, d_upstream, y):
         '''Calculates the gradient `d_net_in` for the current layer.
@@ -307,8 +339,25 @@ class Layer:
         2. Implement gradient for softmax
 
         '''
-        pass
+        d_net_act = None
+        if self.activation == 'relu':
+            net_act = self.net_act.copy()
+            net_act[net_act > 0] = 1
+            d_net_in = d_upstream * net_act
 
+        elif self.activation == 'linear':
+            d_net_in = d_upstream.copy()
+
+        elif self.activation == 'softmax':
+            d_net_act = -1/(len(self.net_act) * self.net_act)
+            y_one_hot = self.one_hot(y, self.net_act.shape[1])
+            d_net_in = d_upstream * self.net_act * (y_one_hot - self.net_act)
+
+        else:
+            raise ValueError('Error! Unknown activation function ', self.activation)
+        return d_net_in
+
+    
 
 class Conv2D(Layer):
     '''Convolutational layer that does a 2D spatial convolution on input `images`.
@@ -355,8 +404,14 @@ class Conv2D(Layer):
         control the random weight initialization process).
         '''
         super().__init__(number, name, activation=activation, reg=reg, verbose=verbose)
+        
+        if r_seed is not None:
+            np.random.seed(r_seed + number)
+            
+        self.wts = np.random.normal(0, wt_scale, size = (n_kers, n_chans, ker_sz, ker_sz))
+        self.b = np.random.normal(0, wt_scale, size = (n_kers,))
 
-        pass
+        
 
     def compute_net_in(self):
         '''Computes `self.net_in` via convolution.
@@ -377,7 +432,8 @@ class Conv2D(Layer):
         Hint:
         This should be an easy one-liner, you've done all the hard work last week :)
         '''
-        pass
+        self.net_in = filter_ops.conv2nn(self.input, self.wts, self.b, verbose=self.verbose)
+
 
     def backward_netIn_to_prevLayer_netAct(self, d_upstream):
         '''Computes backward `dprev_net_act`, `d_wts`, d_b` gradients that gets us
@@ -505,7 +561,7 @@ class MaxPool2D(Layer):
         Hint:
         This should be an easy one-liner, you've done all the hard work last week :)
         '''
-        pass
+        self.net_in = filter_ops.max_poolnn(self.input,self.pool_size,self.strides,self.verbose)
 
     def backward_netIn_to_prevLayer_netAct(self, d_upstream):
         '''Computes the dprev_net_act gradient, getting us thru the MaxPool2D layer to the layer
@@ -543,7 +599,28 @@ class MaxPool2D(Layer):
         mini_batch_sz, n_chans, img_y, img_x = self.input.shape
         mini_batch_sz_d, n_chans_d, out_y, out_x = d_upstream.shape
 
-        pass
+        if mini_batch_sz != mini_batch_sz_d:
+            print(f'mini-batches do not match! {mini_batch_sz} != {mini_batch_sz_d}')
+            exit()
+
+        if n_chans != n_chans_d:
+            print(f'n_chans do not match! {n_chans} != {n_chans_d}')
+            exit()
+
+        dprev_net_act = np.zeros(self.input.shape)
+        for img_index in range(mini_batch_sz):
+            for d in range(n_chans):
+                for y in range(out_y):
+                    for x in range(out_x):
+                        max_flat_idx = np.argmax(self.input[img_index, d, y*self.strides:y*self.strides+self.pool_size, x*self.strides:x*self.strides+self.pool_size])
+                        max_idx = np.unravel_index(max_flat_idx, (self.pool_size, self.pool_size))
+                        y_win, x_win = max_idx
+                        max_x = x_win + x*self.strides
+                        max_y = y_win + y*self.strides
+
+                        dprev_net_act[img_index,d,max_y,max_x] = d_upstream[img_index,d,y,x]
+
+        return dprev_net_act, None, None    
 
     def ind2sub(self, linear_ind, sz):
         '''Converts a linear index `linear_ind` to a subscript index based on the window size `sz`
@@ -574,7 +651,8 @@ class Flatten(Layer):
     def compute_net_in(self):
         '''The net input for the Flatten layer is the input reshaped to be appropriate for processing by a Dense layer.
         '''
-        pass
+        input_flatten = np.reshape(self.input,(self.input.shape[0], -1))
+        self.net_in = input_flatten
 
     def backward_netIn_to_prevLayer_netAct(self, d_upstream):
         '''Determines the gradient through the Flatten layer. This amounts to reshaping the upstream gradient to have
@@ -592,7 +670,13 @@ class Flatten(Layer):
         d_wts. None.
         d_b. None.
         '''
-        pass
+        dprev_net_act = np.reshape(d_upstream, self.net_in.shape)
+        
+        # Since Flatten has no weights or biases, set their gradients to None
+        d_wts = None
+        d_b = None
+        
+        return dprev_net_act, d_wts, d_b
 
 
 class Dense(Layer):
@@ -644,12 +728,21 @@ class Dense(Layer):
         '''
         super().__init__(number, name, activation=activation, reg=reg, verbose=verbose)
 
-        pass
+        self.n_units_prev_layer = n_units_prev_layer 
+        self.wts = np.random.normal(0, wt_scale, size=(n_units_prev_layer, units))
+        self.b = np.random.normal(0, wt_scale, size=(units))
+        
+
+
 
     def compute_net_in(self):
         '''Computes `self.net_in` via Dense dot product of inputs (like in ADALINE/MLP).
         '''
-        pass
+        B = self.input.shape[0]        
+        A = np.prod(self.input.shape[1:])
+        self.net_in = np.dot(np.reshape(self.input,(B,A)),self.wts)+self.b
+
+
 
     def backward_netIn_to_prevLayer_netAct(self, d_upstream):
         '''Computes the `dprev_net_act`, `d_wts`, `d_b` gradients for a Dense layer.
@@ -676,7 +769,17 @@ class Dense(Layer):
             Shape errors will frequently show up at this backprop stage, one layer down.
         -Regularize your wts
         '''
-        pass
+        # 3
+        d_b = np.sum(d_upstream, axis=0)
+        # 3-2
+        dprev_net_act = d_upstream @ self.wts.T
+       
+        input_flatten = np.reshape(self.input,(self.input.shape[0], -1))
+
+        # 3        
+        d_wts = input_flatten.T @ d_upstream + (self.reg * self.wts)  
+
+        return np.reshape(dprev_net_act, self.input.shape), d_wts, d_b
 
 
 class Dropout(Layer):
@@ -708,10 +811,13 @@ class Dropout(Layer):
         '''
         super().__init__(number, name, activation='linear', reg=None, verbose=verbose)
 
+        
+        self.rate = rate
+        self.rng = np.random.default_rng(r_seed) 
         self.in_train_mode = None
         self.mask = None
 
-        pass
+        
 
     def set_mode(self, in_train_mode):
         '''Configures the dropout layer to run in either train or test mode.
@@ -721,7 +827,8 @@ class Dropout(Layer):
         in_train_mode: bool.
             If True, indicates layer should operate in training mode. Otherwsie, operate in test mode.
         '''
-        pass
+        if in_train_mode:
+            self.in_train_mode = in_train_mode
 
     def compute_net_in(self):
         '''Compute the net input of the dropout layer.
@@ -737,7 +844,13 @@ class Dropout(Layer):
 
         NOTE: Do NOT use any loops in here! If you do, your net will be needlessly slow.
         '''
-        pass
+        if self.in_train_mode:
+            self.mask = (self.rng.random(self.input.shape) < (1 - self.rate)).astype(float)
+            self.net_in = self.input * self.mask / (1 - self.rate)
+
+        else:
+            self.net_in = self.input
+
 
     def backward_netIn_to_prevLayer_netAct(self, d_upstream):
         '''Determines the gradient through the dropout layer.
@@ -757,4 +870,9 @@ class Dropout(Layer):
         NOTE: Nonzero upstream gradients CANNOT backward flow through this layer for neurons whose net_ins were nixed
         going forward.
         '''
-        pass
+        if self.in_train_mode:
+            dprev_net_act = d_upstream*self.mask / (1-self.rate)
+        else:
+            dprev_net_act = d_upstream
+        
+        return dprev_net_act, None, None
