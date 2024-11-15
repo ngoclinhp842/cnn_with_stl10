@@ -49,7 +49,7 @@ class Network:
         --------
         bool. Whether net is training.
         '''
-        pass
+        return self.is_training
 
     def compile(self, optimizer_name, **kwargs):
         '''Tells each network layer how weights should be updated during backprop
@@ -80,7 +80,9 @@ class Network:
         in_train_mode: bool.
             Are we currently training the net?
         '''
-        pass
+        for i in self.dropout_layer_inds:
+            self.layers[i].set_mode(in_train_mode)
+            
 
     def forward(self, inputs, y):
         '''Do forward pass through whole network
@@ -170,7 +172,17 @@ class Network:
         3. Afer doing the forward pass, configure the dropout layers to operate in whatever mode they were at the start
         of this method.
         '''
-        pass
+        # configure the dropout layers to operate in predict/test mode
+        self.set_dropout_layers_mode(False)
+        # Forward pass thru the net:
+        net_act = inputs
+        for layer in self.layers:
+            net_act = layer.forward(net_act)
+        self.set_dropout_layers_mode(self.in_train_mode)
+        # convert the net_act to class predictions
+        pred_classes = np.argmax(net_act, axis=1)
+        return pred_classes
+            
 
     def accuracy(self, inputs, y, samp_sz=500, mini_batch_sz=15):
         '''Computes accuracy using current net on the inputs `inputs` with classes `y`.
@@ -275,7 +287,55 @@ class Network:
         - Remember to configure Dropout layer(s) appropriately: they should be in training mode while training and not
         in training mode when training is over.
         '''
-        pass
+        num_samps = y_train.shape[0]
+        loss = None
+        # implementing mini batch
+        iterations = (int(np.round(num_samps/mini_batch_sz)))
+        
+        start = time.time()
+        for epoch in range(n_epochs):
+            for iter in range(iterations):
+                if iter == 0:
+                    s = time.time()
+                
+                # make an array that can index mini_batch_sz samples randomly from features
+                mini_batch_indices = np.random.randint(0, num_samps, mini_batch_sz)
+                batch = x_train[mini_batch_indices]
+                batch_labels = y_train[mini_batch_indices]
+                
+                # forward pass
+                loss = self.forward(batch, batch_labels)
+                
+                # printing out the loss and iteration number every 'print_every'
+                if iter % print_every == 0:
+                    print('Loss: ', loss, '; Iteration number: ', iter)
+                
+                # backward pass
+                self.backward(batch_labels)
+
+                # update weights and biases
+                for layer in self.layers:
+                    layer.update_weights()
+                
+                # computing accuracy on the full training and validation sets every 'acc_freq'
+                if iter % acc_freq == 0:
+                    train_acc = self.accuracy(x_train, y_train, samp_sz=num_samps, mini_batch_sz=mini_batch_sz)
+                    self.train_acc_history.append(train_acc)
+                    
+                    validation_acc = self.accuracy(x_validate, y_validate, samp_sz=num_samps, mini_batch_sz=mini_batch_sz)
+                    self.validation_acc_history.append(validation_acc)
+
+                    # print training and validation accuracy every acc_freq iterations
+                    print('Training accuracy: ', train_acc, '; Validation accuracy: ', validation_acc)
+
+                if iter == 0:
+                    e = time.time()
+                    print('Run time of interation 0 of epoch %d in seconds: ' % (epoch), e - s)
+            
+            self.loss_history.append(loss)
+        end = time.time()
+        print('Total training time in seconds: ', end - start)
+            
         return self.loss_history, self.train_acc_history, self.validation_acc_history
 
 
