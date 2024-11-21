@@ -8,6 +8,7 @@ import time
 import numpy as np
 import filter_ops
 import layer
+import accelerated_layer
 
 
 class Network:
@@ -290,7 +291,10 @@ class Network:
         num_samps = y_train.shape[0]
         loss = None
         # implementing mini batch
-        iterations = (int(np.round(num_samps/mini_batch_sz)))
+        iterations = (int(np.ceil(num_samps/mini_batch_sz)))
+
+        print('In each epoch, the number of iterations is', iterations)
+        print('acc_frq is', acc_freq)
         
         start = time.time()
         for epoch in range(n_epochs):
@@ -305,10 +309,11 @@ class Network:
                 
                 # forward pass
                 loss = self.forward(batch, batch_labels)
+                self.loss_history.append(loss)
                 
                 # printing out the loss and iteration number every 'print_every'
                 if iter % print_every == 0:
-                    print('Loss: ', loss, '; Iteration number: ', iter)
+                    print('Iteration', iter, ', Loss: ', loss, )
                 
                 # backward pass
                 self.backward(batch_labels)
@@ -331,8 +336,7 @@ class Network:
                 if iter == 0:
                     e = time.time()
                     print('Run time of interation 0 of epoch %d in seconds: ' % (epoch), e - s)
-            
-            self.loss_history.append(loss)
+
         end = time.time()
         print('Total training time in seconds: ', end - start)
             
@@ -401,6 +405,9 @@ class ConvNet4(Network):
         layer_2 = layer.MaxPool2D(1, "pool linear", pool_size=pooling_sizes[0], strides=pooling_strides[0], activation='linear', reg=reg, verbose=verbose)
         self.layers.append(layer_2)
 
+        flatten = layer.Flatten(2, "flatten linear", verbose=verbose)
+        self.layers.append(flatten)
+
         #def __init__(self, number, name, units, n_units_prev_layer,wt_scale=1e-3, activation='linear', reg=0, verbose=True):
 
         # 3) Dense layer
@@ -409,15 +416,15 @@ class ConvNet4(Network):
         im_y = filter_ops.get_pooling_out_shape(h, pooling_sizes[0], pooling_strides[0])
         prev_layer_units = n_kers[0] * im_x * im_y
 
-        layer_3 = layer.Dense(2, "dense relu", dense_interior_units[0], prev_layer_units, wt_scale=wt_scale, activation='relu', reg=reg, verbose=verbose)
+        layer_3 = layer.Dense(3, "dense relu", dense_interior_units[0], prev_layer_units, wt_scale=wt_scale, activation='relu', reg=reg, verbose=verbose)
         self.layers.append(layer_3)
 
         # 4) Dense softmax output layer
-        layer_4 = layer.Dense(3, "dense softmax", n_classes, dense_interior_units[0], wt_scale=wt_scale , activation='softmax', reg=reg, verbose=verbose)
+        layer_4 = layer.Dense(4, "dense softmax", n_classes, dense_interior_units[0], wt_scale=wt_scale , activation='softmax', reg=reg, verbose=verbose)
         self.layers.append(layer_4)
 
         # 5) self.wt_layer_inds
-        self.wt_layer_inds = [0,2,3]
+        self.wt_layer_inds = [0,3,4]
 
 
 
@@ -472,7 +479,36 @@ class ConvNet4Accel(Network):
 
         n_chans, h, w = input_shape
 
-        pass
+        # 1) Input convolutional layer
+        self.layers = []
+
+        #def __init__(self, number, name, n_kers, ker_sz, n_chans=3, wt_scale=0.01, activation='linear', reg=0, verbose=True):
+        layer_1 = accelerated_layer.Conv2DAccel(0, "conv relu", n_kers[0], ker_sz[0], n_chans=n_chans, wt_scale=wt_scale,  activation='relu', reg=reg, verbose=verbose)
+        self.layers.append(layer_1)
+    
+        # 2) 2x2 max pooling layer
+        layer_2 = accelerated_layer.MaxPool2DAccel(1, "pool linear", pool_size=pooling_sizes[0], strides=pooling_strides[0], activation='linear', reg=reg, verbose=verbose)
+        self.layers.append(layer_2)
+
+        #def __init__(self, number, name, units, n_units_prev_layer,wt_scale=1e-3, activation='linear', reg=0, verbose=True):
+        flatten = layer.Flatten(2, "flatten linear", verbose=verbose)
+        self.layers.append(flatten)
+
+        # 3) Dense layer
+        #finding the previous number of units, readable:
+        im_x = filter_ops.get_pooling_out_shape(w, pooling_sizes[0], pooling_strides[0])
+        im_y = filter_ops.get_pooling_out_shape(h, pooling_sizes[0], pooling_strides[0])
+        prev_layer_units = n_kers[0] * im_x * im_y
+
+        layer_3 = layer.Dense(3, "dense relu", dense_interior_units[0], prev_layer_units, wt_scale=wt_scale, activation='relu', reg=reg, verbose=verbose)
+        self.layers.append(layer_3)
+
+        # 4) Dense softmax output layer
+        layer_4 = layer.Dense(4, "dense softmax", n_classes, dense_interior_units[0], wt_scale=wt_scale , activation='softmax', reg=reg, verbose=verbose)
+        self.layers.append(layer_4)
+
+        # 5) self.wt_layer_inds
+        self.wt_layer_inds = [0,3,4]
 
 class ConvNet4AccelV2(Network):
     '''A ConvNet4 network with the following layers: Conv2D -> MaxPool2D -> Flatten -> Dense -> Dropout -> Dense.
@@ -531,5 +567,40 @@ class ConvNet4AccelV2(Network):
         super().__init__(reg, verbose)
 
         n_chans, h, w = input_shape
+        
+        # 1) Input convolutional layer
+        self.layers = []
 
-        pass
+        layer_1 = accelerated_layer.Conv2DAccel(0, "conv relu", n_kers[0], ker_sz[0], n_chans=n_chans, wt_scale=wt_scale,  activation='relu', reg=reg, r_seed=r_seed, verbose=verbose)
+        self.layers.append(layer_1)
+    
+        # 2) 2x2 max pooling layer
+        layer_2 = accelerated_layer.MaxPool2DAccel(1, "pool linear", pool_size=pooling_sizes[0], strides=pooling_strides[0], activation='linear', reg=reg, verbose=verbose)
+        self.layers.append(layer_2)
+
+        # 3) Flatten layer
+        layer_3 = layer.Flatten(2, "flatten linear", verbose=verbose)
+        self.layers.append(layer_3)
+
+        # 4) Dense layer
+        #finding the previous number of units, readable:
+        im_x = filter_ops.get_pooling_out_shape(w, pooling_sizes[0], pooling_strides[0])
+        im_y = filter_ops.get_pooling_out_shape(h, pooling_sizes[0], pooling_strides[0])
+        prev_layer_units = n_kers[0] * im_x * im_y
+
+        layer_4 = layer.Dense(3, "dense relu", dense_interior_units[0], prev_layer_units, wt_scale=wt_scale, activation='relu', reg=reg, r_seed=r_seed, verbose=verbose)
+        self.layers.append(layer_4)
+
+        # 5) Dropout layer 
+        layer_5 = layer.Dropout(4, "dropout linear", rate=dropout_rate, r_seed=r_seed, verbose=verbose)
+        self.layers.append(layer_5)
+
+        # 6) Dense softmax output layer
+        layer_6 = layer.Dense(5, "dense softmax", n_classes, dense_interior_units[0], wt_scale=wt_scale , activation='softmax', reg=reg, r_seed=r_seed, verbose=verbose)
+        self.layers.append(layer_6)
+
+        # 7) self.wt_layer_inds
+        self.wt_layer_inds = [0,3,5]
+
+        # 8) self.dropout_layer_inds
+        self.dropout_layer_inds = [4]

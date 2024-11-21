@@ -670,7 +670,7 @@ class Flatten(Layer):
         d_wts. None.
         d_b. None.
         '''
-        dprev_net_act = np.reshape(d_upstream, self.net_in.shape)
+        dprev_net_act = np.reshape(d_upstream, self.input.shape)
         
         # Since Flatten has no weights or biases, set their gradients to None
         d_wts = None
@@ -738,9 +738,10 @@ class Dense(Layer):
     def compute_net_in(self):
         '''Computes `self.net_in` via Dense dot product of inputs (like in ADALINE/MLP).
         '''
-        B = self.input.shape[0]        
-        A = np.prod(self.input.shape[1:])
-        self.net_in = np.dot(np.reshape(self.input,(B,A)),self.wts)+self.b
+        # B = self.input.shape[0]        
+        # A = np.prod(self.input.shape[1:])
+        # self.net_in = np.dot(np.reshape(self.input,(B,A)),self.wts)+self.b
+        self.net_in = np.dot(self.input, self.wts)+self.b
 
 
 
@@ -774,12 +775,14 @@ class Dense(Layer):
         # 3-2
         dprev_net_act = d_upstream @ self.wts.T
        
-        input_flatten = np.reshape(self.input,(self.input.shape[0], -1))
+        # input_flatten = np.reshape(self.input,(self.input.shape[0], -1))
 
         # 3        
-        d_wts = input_flatten.T @ d_upstream + (self.reg * self.wts)  
+        # d_wts = input_flatten.T @ d_upstream + (self.reg * self.wts)  
+        d_wts = self.input.T @ d_upstream + (self.reg * self.wts)  
 
-        return np.reshape(dprev_net_act, self.input.shape), d_wts, d_b
+        # return np.reshape(dprev_net_act, self.input.shape), d_wts, d_b
+        return dprev_net_act, d_wts, d_b
 
 
 class Dropout(Layer):

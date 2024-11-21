@@ -183,6 +183,7 @@ class AdamW(Optimizer):
             print('FYI: Using AdamW without any reg.')
 
         self.lr = lr
+        self.reg = reg
         self.beta1 = beta1
         self.beta2 = beta2
         self.eps = eps
@@ -190,8 +191,6 @@ class AdamW(Optimizer):
 
         self.v = None
         self.p = None
-
-        pass
 
     def update_weights(self):
         '''Updates the weights according to Adam and returns a
@@ -210,7 +209,22 @@ class AdamW(Optimizer):
         - Remember that t should = 1 on the 1st wt update.
         - Remember to update/save the new values of v, p between updates.
         '''
-        pass
+        if self.t == 0:
+            self.m = np.zeros(self.wts.shape)
+            self.v = np.zeros(self.wts.shape)
+
+        self.t += 1
+
+        d_wts = self.d_wts - (self.reg * self.wts)
+
+        self.m = self.beta1 * self.m + (1 - self.beta1) * d_wts
+        self.v = self.beta2 * self.v + (1 - self.beta2) * d_wts**2
+
+        n = self.m / (1 - self.beta1**self.t)
+        u = self.v / (1 - self.beta2**self.t)
+        self.wts = self.wts - (self.lr*n)/(u**(0.5) + self.eps) - (self.lr * self.reg * self.wts)
+        new_wts_adam = np.copy(self.wts)
+        return new_wts_adam
 
 
 def test_sgd():
