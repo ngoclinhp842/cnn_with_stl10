@@ -34,6 +34,8 @@ class Optimizer:
             return Adam(**kwargs)
         elif name.lower() == 'adamw':
             return AdamW(*args, **kwargs)
+        elif name.lower() == 'adagrad':
+            return Adagrad(*args, **kwargs) 
         else:
             raise ValueError('Unknown optimizer name!')
 
@@ -225,6 +227,44 @@ class AdamW(Optimizer):
         self.wts = self.wts - (self.lr*n)/(u**(0.5) + self.eps) - (self.lr * self.reg * self.wts)
         new_wts_adam = np.copy(self.wts)
         return new_wts_adam
+    
+class Adagrad(Optimizer):
+    ''' EXTENSION
+    Update weights using the Adagrad update rule.'''
+    def __init__(self, lr=0.01, epsilon=1e-8):
+        '''Adagrad optimizer constructor
+
+        Parameters:
+        -----------
+        lr: float > 0. Learning rate.
+        epsilon: float. Small value to prevent division by zero.
+        '''
+        self.lr = lr
+        self.epsilon = epsilon
+        self.G = None  # This will store the sum of squared gradients
+
+    def update_weights(self):
+        '''Updates the weights according to Adagrad and returns a
+        deep COPY of the updated weights for this time step.
+
+        Returns:
+        --------
+        The updated weights for this time step.
+        '''
+        # Initialize G if it's the first time step
+        if self.G is None:
+            self.G = np.zeros_like(self.wts)  # Same shape as weights
+
+        # Accumulate the squared gradients
+        self.G += self.d_wts**2
+
+        # Update the weights based on the adjusted learning rate
+        self.wts -= self.lr * self.d_wts / (np.sqrt(self.G) + self.epsilon)
+
+        # Return a copy of the updated weights
+        new_wts_adagrad = np.copy(self.wts)
+        return new_wts_adagrad
+
 
 
 def test_sgd():
