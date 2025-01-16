@@ -9,8 +9,7 @@ To run CNN_with_STL10 on the file main.py
 python3 main.py
 ```
 
-## 👀 Example Running deep_dream_extension.py:
-- Original Image
+## 👀 Example Running main.py:
 <p align="center">
   <img align="center" alt="Accuracy over Epoch" width="400" src="https://github.com/ngoclinhp842/cnn_with_stl10/blob/main/outputs/running_example.png">
 </p>
